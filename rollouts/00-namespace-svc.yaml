@@ -1,0 +1,59 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: tp23
+---
+# Service "actif" : reçoit le trafic de production (Blue/Green : version active ; Canary : stable + canary)
+apiVersion: v1
+kind: Service
+metadata:
+  name: demo-active
+  namespace: tp23
+  labels:
+    app: demo
+spec:
+  selector:
+    app: demo
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+---
+# Service "preview" : permet de tester la nouvelle version avant la bascule (Blue/Green)
+apiVersion: v1
+kind: Service
+metadata:
+  name: demo-preview
+  namespace: tp23
+  labels:
+    app: demo
+spec:
+  selector:
+    app: demo
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+---
+# Collecte des métriques par le Prometheus du TP21 (release kps)
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: demo
+  namespace: tp23
+  labels:
+    release: kps
+spec:
+  namespaceSelector:
+    matchNames: [tp23]
+  selector:
+    matchLabels:
+      app: demo
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: 15s
+  # Copie le hash du ReplicaSet (posé par Argo Rollouts) sur les métriques :
+  # permet de mesurer le taux d'erreur de la version canary seule.
+  podTargetLabels:
+    - rollouts-pod-template-hash

@@ -1,0 +1,25 @@
+apiVersion: argoproj.io/v1alpha1
+kind: AnalysisTemplate
+metadata:
+  name: error-rate
+  namespace: tp23
+spec:
+  args:
+    - name: canary-hash        # fourni par le Rollout : hash des Pods de la nouvelle version
+  metrics:
+    - name: error-rate
+      initialDelay: 30s        # laisser Prometheus collecter les premières mesures
+      interval: 30s            # une mesure toutes les 30 s
+      failureLimit: 1          # 2e mesure en échec => analyse en échec => rollback
+      successCondition: result[0] < 0.05
+      provider:
+        prometheus:
+          address: http://kps-kube-prometheus-stack-prometheus.monitoring.svc.cluster.local:9090
+          # Taux de réponses 5xx des seuls Pods canary sur 1 minute.
+          # "> 0" et "or vector(0)" évitent un NaN quand il n'y a pas encore de trafic.
+          query: |
+            (
+              sum(rate(http_request_duration_seconds_count{namespace="tp23", rollouts_pod_template_hash="{{args.canary-hash}}", status_code=~"5.."}[1m]))
+              /
+              (sum(rate(http_request_duration_seconds_count{namespace="tp23", rollouts_pod_template_hash="{{args.canary-hash}}"}[1m])) > 0)
+            ) or vector(0)

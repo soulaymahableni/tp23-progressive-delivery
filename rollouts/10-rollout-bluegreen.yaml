@@ -1,0 +1,42 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Rollout
+metadata:
+  name: demo
+  namespace: tp23
+spec:
+  replicas: 2
+  revisionHistoryLimit: 3
+  selector:
+    matchLabels:
+      app: demo
+  template:
+    metadata:
+      labels:
+        app: demo
+    spec:
+      containers:
+        - name: demo
+          image: observability-demo:1.0.0   # TODO-registre remplacé : image du TP21 importée dans K3s
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 3000
+          env:
+            - name: APP_VERSION
+              value: blue
+            - name: ERROR_RATE
+              value: "0.01"
+            - name: OTEL_SDK_DISABLED   # traces non utiles dans ce TP
+              value: "true"
+          readinessProbe:
+            httpGet: { path: /healthz, port: http }
+            periodSeconds: 5
+          resources:
+            requests: { cpu: 20m, memory: 64Mi }
+            limits: { memory: 192Mi }
+  strategy:
+    blueGreen:
+      activeService: demo-active       # trafic de production
+      previewService: demo-preview     # nouvelle version, pour tester avant la bascule
+      autoPromotionEnabled: false      # la bascule attend un "promote" manuel
+      scaleDownDelaySeconds: 60        # l'ancienne version reste démarrée 60 s après la bascule
